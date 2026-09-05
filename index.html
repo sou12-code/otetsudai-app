@@ -31,6 +31,19 @@
         .print-header {
             display: none;
         }
+        .delete-btn {
+            margin-left: 10px;
+            padding: 3px 8px;
+            font-size: 12px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .delete-btn:hover {
+            background-color: #bb2d3b;
+        }
 
         /* PDF出力（印刷）時のスタイル設定 */
         @media print {
@@ -63,6 +76,7 @@
             <select id="work-type" style="width: 100%; max-width: 300px;">
                 <option value="time">時間で記録（掃除・勉強など）</option>
                 <option value="box">箱作り（個数で記録）</option>
+                <option value="simple">内容のみ（時間・個数なし）</option>
             </select>
         </div>
 
@@ -88,7 +102,13 @@
             <input type="number" id="box-count" value="10" min="1" style="width: 80px;"> 個
         </div>
 
-        <button id="add-btn" style="background-color: #0d6efd; color: white; border: none; border-radius: 4px; font-weight: bold; width: 100%; max-width: 300px; padding: 12px;">記録を追加する</button>
+        <!-- 内容のみ入力グループ -->
+        <div id="simple-input-group" class="input-group" style="display: none;">
+            <label>やったこと: </label><br>
+            <input type="text" id="simple-work-name" placeholder="例: ゴミ出し、犬の散歩" style="width: 80%;">
+        </div>
+
+        <button id="add-btn" style="background-color: #0d6efd; color: white; border: none; border-radius: 4px; font-weight: bold; width: 100%; max-width: 300px; padding: 12px; cursor: pointer;">記録を追加する</button>
         <hr>
     </div>
 
@@ -97,11 +117,12 @@
         <h2 style="margin-top: 0; font-size: 16px;">合計結果</h2>
         <p style="font-size: 16px; margin: 5px 0;">合計時間: <strong id="total-time" style="color: #0d6efd;">0時間 0分</strong></p>
         <p style="font-size: 16px; margin: 5px 0;">箱作り合計: <strong id="total-boxes" style="color: #0d6efd;">レギュラー 0個 / コンテナ 0個</strong></p>
+        <p style="font-size: 16px; margin: 5px 0;">内容のみの手伝い: <strong id="total-simple" style="color: #0d6efd;">0件</strong></p>
     </div>
 
     <!-- 履歴リストエリア -->
     <h2>やったことの履歴</h2>
-    <ul id="history-list" style="line-height: 1.8;">
+    <ul id="history-list" style="line-height: 2.2;">
         <!-- ここに履歴が追加されます -->
     </ul>
 
@@ -118,13 +139,9 @@
         // 入力種類の切り替え処理
         document.getElementById('work-type').addEventListener('change', function() {
             let type = this.value;
-            if (type === 'time') {
-                document.getElementById('time-input-group').style.display = 'block';
-                document.getElementById('box-input-group').style.display = 'none';
-            } else {
-                document.getElementById('time-input-group').style.display = 'none';
-                document.getElementById('box-input-group').style.display = 'block';
-            }
+            document.getElementById('time-input-group').style.display = (type === 'time') ? 'block' : 'none';
+            document.getElementById('box-input-group').style.display = (type === 'box') ? 'block' : 'none';
+            document.getElementById('simple-input-group').style.display = (type === 'simple') ? 'block' : 'none';
         });
 
         renderRecords();
@@ -163,7 +180,7 @@
                 document.getElementById('work-hours').value = "0";
                 document.getElementById('work-minutes').value = "0";
 
-            } else {
+            } else if (workType === 'box') {
                 let boxType = document.getElementById('box-type').value;
                 let boxCount = parseInt(document.getElementById('box-count').value) || 0;
 
@@ -180,6 +197,22 @@
                 });
 
                 document.getElementById('box-count').value = "10";
+
+            } else if (workType === 'simple') {
+                let workName = document.getElementById('simple-work-name').value;
+
+                if (workName.trim() === "") {
+                    alert("やったことを入力してください！");
+                    return;
+                }
+
+                records.push({
+                    type: 'simple',
+                    date: dateString,
+                    name: workName
+                });
+
+                document.getElementById('simple-work-name').value = "";
             }
 
             localStorage.setItem('workRecords', JSON.stringify(records));
@@ -194,10 +227,13 @@
             let grandTotalMinutes = 0;
             let totalRegular = 0;
             let totalContainer = 0;
+            let totalSimpleCount = 0;
 
-            records.forEach(function(item) {
+            records.forEach(function(item, index) {
                 let dateDisplay = item.date ? `[${item.date}] ` : "";
                 let newItem = document.createElement('li');
+
+                let textSpan = document.createElement('span');
 
                 // 旧データまたは時間記録の場合
                 if (!item.type || item.type === 'time') {
@@ -209,7 +245,7 @@
                     if (h > 0) timeText += `${h}時間 `;
                     if (m > 0 || h === 0) timeText += `${m}分`;
 
-                    newItem.innerText = `${dateDisplay}${item.name} : ${timeText}`;
+                    textSpan.innerText = `${dateDisplay}${item.name} : ${timeText}`;
                 } 
                 // 箱作りの場合
                 else if (item.type === 'box') {
@@ -219,9 +255,25 @@
                         totalContainer += item.count;
                     }
 
-                    newItem.innerText = `${dateDisplay}箱作り（${item.boxType}） : ${item.count}個`;
+                    textSpan.innerText = `${dateDisplay}箱作り（${item.boxType}） : ${item.count}個`;
+                }
+                // 内容のみの場合
+                else if (item.type === 'simple') {
+                    totalSimpleCount++;
+                    textSpan.innerText = `${dateDisplay}${item.name}`;
                 }
 
+                newItem.appendChild(textSpan);
+
+                // 個別削除ボタンの作成
+                let deleteBtn = document.createElement('button');
+                deleteBtn.innerText = "削除";
+                deleteBtn.className = "delete-btn no-print";
+                deleteBtn.onclick = function() {
+                    deleteRecord(index);
+                };
+
+                newItem.appendChild(deleteBtn);
                 list.appendChild(newItem);
             });
 
@@ -230,6 +282,14 @@
             let totalM = grandTotalMinutes % 60;
             document.getElementById('total-time').innerText = `${totalH}時間 ${totalM}分`;
             document.getElementById('total-boxes').innerText = `レギュラー ${totalRegular}個 / コンテナ ${totalContainer}個`;
+            document.getElementById('total-simple').innerText = `${totalSimpleCount}件`;
+        }
+
+        // 個別削除処理
+        function deleteRecord(index) {
+            records.splice(index, 1);
+            localStorage.setItem('workRecords', JSON.stringify(records));
+            renderRecords();
         }
 
         // PDF保存処理
@@ -241,7 +301,8 @@
         document.getElementById('reset-btn').addEventListener('click', function() {
             if (confirm("本当に記録をすべて消しますか？")) {
                 localStorage.removeItem('workRecords');
-                location.reload();
+                records = [];
+                renderRecords();
             }
         });
     </script>
