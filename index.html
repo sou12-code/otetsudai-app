@@ -10,9 +10,10 @@
             margin: 20px;
             color: #333;
         }
-        input, button {
+        input, select, button {
             font-size: 16px;
             padding: 8px;
+            margin-top: 5px;
         }
         .summary-card {
             background-color: #f8f9fa;
@@ -20,6 +21,12 @@
             padding: 15px;
             border-radius: 5px;
             margin-bottom: 20px;
+        }
+        .input-group {
+            background-color: #f1f5f9;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
         }
         .print-header {
             display: none;
@@ -44,31 +51,52 @@
     <!-- PDF出力時に上部に表示されるタイトル -->
     <div class="print-header">
         <h1 style="margin: 0; font-size: 22px;">お小遣い請求書</h1>
-        <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">手伝い時間記録</p>
+        <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">手伝い時間・作業記録</p>
     </div>
 
     <!-- 入力フォーム（PDF化の時は隠れます） -->
     <div class="no-print">
-        <h1>手伝い時間記録アプリ</h1>
+        <h1>手伝い記録アプリ</h1>
+        
         <div>
-            <label>やったこと: </label><br>
-            <input type="text" id="work-name" placeholder="例: 掃除、勉強" style="width: 80%;">
+            <label><strong>手伝いの種類:</strong></label><br>
+            <select id="work-type" style="width: 100%; max-width: 300px;">
+                <option value="time">時間で記録（掃除・勉強など）</option>
+                <option value="box">箱作り（個数で記録）</option>
+            </select>
         </div>
+
         <br>
-        <div>
+
+        <!-- 時間入力グループ -->
+        <div id="time-input-group" class="input-group">
+            <label>やったこと: </label><br>
+            <input type="text" id="work-name" placeholder="例: 掃除、勉強" style="width: 80%;"><br><br>
             <label>時間: </label><br>
             <input type="number" id="work-hours" value="0" min="0" style="width: 60px;"> 時間
             <input type="number" id="work-minutes" value="30" min="0" max="59" style="width: 60px;"> 分
         </div>
-        <br>
-        <button id="add-btn" style="background-color: #0d6efd; color: white; border: none; border-radius: 4px; font-weight: bold;">記録を追加する</button>
+
+        <!-- 箱作り入力グループ -->
+        <div id="box-input-group" class="input-group" style="display: none;">
+            <label>箱の種類: </label><br>
+            <select id="box-type">
+                <option value="レギュラー">レギュラー</option>
+                <option value="コンテナ">コンテナ</option>
+            </select><br><br>
+            <label>作った個数: </label><br>
+            <input type="number" id="box-count" value="10" min="1" style="width: 80px;"> 個
+        </div>
+
+        <button id="add-btn" style="background-color: #0d6efd; color: white; border: none; border-radius: 4px; font-weight: bold; width: 100%; max-width: 300px; padding: 12px;">記録を追加する</button>
         <hr>
     </div>
 
     <!-- 合計結果エリア -->
     <div class="summary-card">
         <h2 style="margin-top: 0; font-size: 16px;">合計結果</h2>
-        <p style="font-size: 18px; margin: 0;">合計時間: <strong id="total-time" style="color: #0d6efd;">0時間 0分</strong></p>
+        <p style="font-size: 16px; margin: 5px 0;">合計時間: <strong id="total-time" style="color: #0d6efd;">0時間 0分</strong></p>
+        <p style="font-size: 16px; margin: 5px 0;">箱作り合計: <strong id="total-boxes" style="color: #0d6efd;">レギュラー 0個 / コンテナ 0個</strong></p>
     </div>
 
     <!-- 履歴リストエリア -->
@@ -83,83 +111,133 @@
         <button id="reset-btn" style="padding: 10px 20px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; margin-left: 10px;">データをすべてリセット</button>
     </div>
 
-    <!-- JavaScriptをHTMLの中に直接埋め込み -->
+    <!-- JavaScriptコード -->
     <script>
         let records = JSON.parse(localStorage.getItem('workRecords')) || [];
 
+        // 入力種類の切り替え処理
+        document.getElementById('work-type').addEventListener('change', function() {
+            let type = this.value;
+            if (type === 'time') {
+                document.getElementById('time-input-group').style.display = 'block';
+                document.getElementById('box-input-group').style.display = 'none';
+            } else {
+                document.getElementById('time-input-group').style.display = 'none';
+                document.getElementById('box-input-group').style.display = 'block';
+            }
+        });
+
         renderRecords();
 
+        // 記録追加処理
         document.getElementById('add-btn').addEventListener('click', function() {
-            let workName = document.getElementById('work-name').value;
-            let hours = parseInt(document.getElementById('work-hours').value) || 0;
-            let minutes = parseInt(document.getElementById('work-minutes').value) || 0;
-
-            if (workName.trim() === "") {
-                alert("やったことを入力してください！");
-                return;
-            }
-
-            if (hours === 0 && minutes === 0) {
-                alert("時間を入力してください！");
-                return;
-            }
-
-            let totalMinutesInput = (hours * 60) + minutes;
+            let workType = document.getElementById('work-type').value;
 
             let today = new Date();
             let dateString = today.getFullYear() + '/' + 
                              String(today.getMonth() + 1).padStart(2, '0') + '/' + 
                              String(today.getDate()).padStart(2, '0');
 
-            records.push({
-                date: dateString,
-                name: workName,
-                minutes: totalMinutesInput
-            });
+            if (workType === 'time') {
+                let workName = document.getElementById('work-name').value;
+                let hours = parseInt(document.getElementById('work-hours').value) || 0;
+                let minutes = parseInt(document.getElementById('work-minutes').value) || 0;
+
+                if (workName.trim() === "") {
+                    alert("やったことを入力してください！");
+                    return;
+                }
+                if (hours === 0 && minutes === 0) {
+                    alert("時間を入力してください！");
+                    return;
+                }
+
+                records.push({
+                    type: 'time',
+                    date: dateString,
+                    name: workName,
+                    minutes: (hours * 60) + minutes
+                });
+
+                document.getElementById('work-name').value = "";
+                document.getElementById('work-hours').value = "0";
+                document.getElementById('work-minutes').value = "0";
+
+            } else {
+                let boxType = document.getElementById('box-type').value;
+                let boxCount = parseInt(document.getElementById('box-count').value) || 0;
+
+                if (boxCount <= 0) {
+                    alert("個数を入力してください！");
+                    return;
+                }
+
+                records.push({
+                    type: 'box',
+                    date: dateString,
+                    boxType: boxType,
+                    count: boxCount
+                });
+
+                document.getElementById('box-count').value = "10";
+            }
 
             localStorage.setItem('workRecords', JSON.stringify(records));
-
             renderRecords();
-
-            document.getElementById('work-name').value = "";
-            document.getElementById('work-hours').value = "0";
-            document.getElementById('work-minutes').value = "0";
         });
 
+        // 一覧と合計の再描写
         function renderRecords() {
             let list = document.getElementById('history-list');
             list.innerHTML = "";
 
             let grandTotalMinutes = 0;
+            let totalRegular = 0;
+            let totalContainer = 0;
 
             records.forEach(function(item) {
-                grandTotalMinutes += item.minutes;
-
-                let h = Math.floor(item.minutes / 60);
-                let m = item.minutes % 60;
-                let timeText = "";
-                if (h > 0) timeText += `${h}時間 `;
-                if (m > 0 || h === 0) timeText += `${m}分`;
-
                 let dateDisplay = item.date ? `[${item.date}] ` : "";
-
                 let newItem = document.createElement('li');
-                newItem.innerText = `${dateDisplay}${item.name} : ${timeText}`;
+
+                // 旧データまたは時間記録の場合
+                if (!item.type || item.type === 'time') {
+                    grandTotalMinutes += item.minutes;
+
+                    let h = Math.floor(item.minutes / 60);
+                    let m = item.minutes % 60;
+                    let timeText = "";
+                    if (h > 0) timeText += `${h}時間 `;
+                    if (m > 0 || h === 0) timeText += `${m}分`;
+
+                    newItem.innerText = `${dateDisplay}${item.name} : ${timeText}`;
+                } 
+                // 箱作りの場合
+                else if (item.type === 'box') {
+                    if (item.boxType === 'レギュラー') {
+                        totalRegular += item.count;
+                    } else if (item.boxType === 'コンテナ') {
+                        totalContainer += item.count;
+                    }
+
+                    newItem.innerText = `${dateDisplay}箱作り（${item.boxType}） : ${item.count}個`;
+                }
+
                 list.appendChild(newItem);
             });
 
+            // 集計結果の表示更新
             let totalH = Math.floor(grandTotalMinutes / 60);
             let totalM = grandTotalMinutes % 60;
-
             document.getElementById('total-time').innerText = `${totalH}時間 ${totalM}分`;
+            document.getElementById('total-boxes').innerText = `レギュラー ${totalRegular}個 / コンテナ ${totalContainer}個`;
         }
 
-        // PDF保存ボタンの処理
+        // PDF保存処理
         document.getElementById('print-btn').addEventListener('click', function() {
             window.print();
         });
 
-        // リセットボタンの処理
+        // リセット処理
         document.getElementById('reset-btn').addEventListener('click', function() {
             if (confirm("本当に記録をすべて消しますか？")) {
                 localStorage.removeItem('workRecords');
